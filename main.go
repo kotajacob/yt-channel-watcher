@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -13,15 +14,13 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-const baseFeedURL = `https://www.youtube.com/feeds/videos.xml?channel_id=`
-
 type Config struct {
 	Channels []Channel
 }
 
 type Channel struct {
-	ID   string
-	Path string
+	URL  string
+	Name string
 }
 
 func main() {
@@ -46,22 +45,42 @@ func main() {
 		log.Fatalf("failed reading %v: %v\n", *configPath, err)
 	}
 
-	// List existing videos.
-	// Fetch recent RSS videos.
-	// Download unmatched videos.
 	for _, channel := range config.Channels {
-		channelPath := filepath.Join(*videoPath, channel.Path)
-		existing, err := existingVideos(channelPath)
+		path := filepath.Join(*videoPath, channel.Name)
+		vids, err := existingVideos(path)
 		if err != nil {
-			log.Fatalf("failed reading %v: %v\n", channelPath, err)
+			log.Fatalf(
+				"failed listing previous videos of %v: %v\n",
+				channel.URL,
+				err,
+			)
 		}
-		fmt.Println("existing", existing)
-		latest, _ := latestDate(existing)
-		fmt.Println("latest", latest)
-		// err = fetch(channel.ID)
-		// if err != nil {
-		// 	log.Fatalln(err)
-		// }
+
+		latest, err := latestDate(vids)
+		if err != nil {
+			log.Fatalf(
+				"failed calculating latest upload date of %v: %v\n",
+				channel.URL,
+				err,
+			)
+		}
+
+		cmd := exec.Command(
+			`yt-dlp`,
+			`--write-subs`,
+			`-o`, path+`/%(upload_date)s - %(title)s.%(ext)s`,
+			`--dateafter`, latest,
+			channel.URL,
+		)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		for _, v := range cmd.Args {
+			fmt.Println(v)
+		}
+		err = cmd.Run()
+		if err != nil {
+			log.Printf("yt-dlp for %v with error: %v", cmd.String(), err)
+		}
 	}
 }
 
