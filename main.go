@@ -34,7 +34,7 @@ func main() {
 	)
 	videoPath := flag.String(
 		"vids",
-		"/var/www/fog/vids",
+		"/var/fog/vids",
 		"Path to video folder",
 	)
 	flag.Parse()
